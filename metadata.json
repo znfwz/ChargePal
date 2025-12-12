@@ -1,0 +1,5 @@
+{
+  "name": "ChargePal (充小助)",
+  "description": "智能新能源汽车充电管理系统。追踪费用、分析能耗，支持多车管理与云端同步。",
+  "requestFramePermissions": []
+}
