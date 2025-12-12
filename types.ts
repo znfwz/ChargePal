@@ -58,6 +58,10 @@ export interface AppState {
   vehicles: Vehicle[];
   records: ChargingRecord[];
   supabaseConfig?: SupabaseConfig;
+  
+  // Sync Queues for Deletions
+  deletedRecordIds?: string[];
+  deletedVehicleIds?: string[];
 }
 
 export type ViewState = 'dashboard' | 'records' | 'add_record' | 'settings' | 'onboarding';

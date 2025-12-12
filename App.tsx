@@ -12,7 +12,9 @@ const App: React.FC = () => {
   const [state, setState] = useState<AppState>({
     user: { name: '', onboarded: false, theme: 'system' },
     vehicles: [],
-    records: []
+    records: [],
+    deletedRecordIds: [],
+    deletedVehicleIds: []
   });
   const [view, setView] = useState<ViewState>('dashboard');
   const [editingRecord, setEditingRecord] = useState<ChargingRecord | null>(null);
@@ -84,7 +86,15 @@ const App: React.FC = () => {
             const newRecords = prev.records.filter(r => r.id !== id);
             // Recalculate to fix any gaps in the odometer chain
             const recalculatedRecords = recalculateRecords(newRecords, prev.vehicles);
-            return { ...prev, records: recalculatedRecords };
+            
+            // Add to deletion queue for Sync
+            const currentDeleted = prev.deletedRecordIds || [];
+            
+            return { 
+                ...prev, 
+                records: recalculatedRecords,
+                deletedRecordIds: [...currentDeleted, id] 
+            };
         });
     }
   };
@@ -99,7 +109,10 @@ const App: React.FC = () => {
     if (!state.supabaseConfig) return;
     setIsSyncing(true);
     try {
-        await syncWithSupabase(state.supabaseConfig, state);
+        const result = await syncWithSupabase(state.supabaseConfig, state);
+        if (result.success && result.data) {
+             setState(prev => ({ ...prev, ...result.data }));
+        }
         // Optional: Add toast notification here
     } catch (e) {
         console.error("Sync failed", e);

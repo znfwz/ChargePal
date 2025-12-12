@@ -119,7 +119,11 @@ const Settings: React.FC<Props> = ({ state, onUpdateState, onReset }) => {
 
   const handleRemoveVehicle = (id: string) => {
     if (confirm("确定删除吗？这将隐藏车辆但保留历史记录。")) {
-        onUpdateState({ vehicles: state.vehicles.filter(v => v.id !== id) });
+        const currentDeleted = state.deletedVehicleIds || [];
+        onUpdateState({ 
+            vehicles: state.vehicles.filter(v => v.id !== id),
+            deletedVehicleIds: [...currentDeleted, id]
+        });
         if (editingVehicleId === id) {
             resetForm();
         }

@@ -8,6 +8,8 @@ export const DEFAULT_STATE: AppState = {
   user: { name: '', onboarded: false, theme: 'system' },
   vehicles: [],
   records: [],
+  deletedRecordIds: [],
+  deletedVehicleIds: [],
 };
 
 export const loadState = (): AppState => {
@@ -71,6 +73,30 @@ export const syncWithSupabase = async (
   try {
     const supabase = createClient(config.projectUrl, config.apiKey);
     const now = Date.now();
+
+    // --- STEP 0: PROCESS DELETIONS ---
+    // Handle deleted records
+    if (localState.deletedRecordIds && localState.deletedRecordIds.length > 0) {
+        const { error: delError } = await supabase
+            .from('charging_records')
+            .delete()
+            .in('id', localState.deletedRecordIds);
+        
+        if (delError) throw new Error(`同步删除记录失败: ${delError.message}`);
+    }
+
+    // Handle deleted vehicles (Careful with FK constraints, normally records should be deleted first)
+    if (localState.deletedVehicleIds && localState.deletedVehicleIds.length > 0) {
+        // Note: In Supabase, you might need Cascade Delete enabled on FK, or delete records first.
+        // Since we delete records by ID above, orphan records shouldn't be an issue if app logic is correct.
+        // However, we need to map IDs to License Plates for cloud deletion if using licensePlate as PK
+        // But localState.deletedVehicleIds contains local IDs. We might have lost the plate info if deleted locally.
+        // Limitation: If vehicle is deleted locally, we might not know its plate to delete remotely if we didn't store it.
+        // Ideally, we should track deleted PLATES, but for now, we assume users don't delete vehicles often.
+        // Better approach for now: We won't auto-delete vehicles from cloud to avoid accidental data loss unless strictly implemented.
+        // SKIPPING VEHICLE CLOUD DELETION FOR SAFETY unless requested, focusing on RECORDS as per prompt.
+    }
+
 
     // --- STEP 1: PUSH Local Data to Cloud (Upsert) ---
 
@@ -212,10 +238,12 @@ export const syncWithSupabase = async (
 
     return { 
         success: true, 
-        message: "同步成功 (已合并云端数据)", 
+        message: "同步成功 (已更新并移除云端已删记录)", 
         data: {
             vehicles: mergedVehicles,
-            records: finalRecords
+            records: finalRecords,
+            deletedRecordIds: [], // Clear deletion queue on success
+            deletedVehicleIds: [] // Clear deletion queue on success
         }
     };
 
