@@ -1,8 +1,7 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import { AppState, ChargingRecord, ChargingType } from '../types';
 import { formatDate, formatCurrency } from '../services/utils';
-import { Edit2, Zap, BatteryCharging, Clock, Activity, AlertTriangle, Gauge, Trash2, Filter, X, Calendar, Search, Car, Share2, Download } from 'lucide-react';
-import html2canvas from 'html2canvas';
+import { Edit2, Zap, BatteryCharging, Clock, Activity, AlertTriangle, Gauge, Trash2, Filter, X, Calendar, Search, Car } from 'lucide-react';
 
 interface Props {
   state: AppState;
@@ -18,11 +17,6 @@ const RecordList: React.FC<Props> = ({ state, onEdit, onDelete }) => {
   const [filterType, setFilterType] = useState<ChargingType | 'all'>('all');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
-  
-  // Share State
-  const shareRef = useRef<HTMLDivElement>(null);
-  const [sharingData, setSharingData] = useState<{record: ChargingRecord, vehicleName: string} | null>(null);
-  const [isSharing, setIsSharing] = useState(false);
 
   const vehicleMap = new Map(state.vehicles.map(v => [v.id, v.name]));
 
@@ -77,138 +71,9 @@ const RecordList: React.FC<Props> = ({ state, onEdit, onDelete }) => {
       return (mins / 60).toFixed(2) + 'h';
   };
 
-  const handleShare = async (e: React.MouseEvent, record: ChargingRecord) => {
-      e.stopPropagation();
-      if (isSharing) return;
-      setIsSharing(true);
-
-      const vName = vehicleMap.get(record.vehicleId) || '未知车辆';
-      setSharingData({ record, vehicleName: vName });
-
-      // Wait for React to render the hidden share card
-      setTimeout(async () => {
-          if (shareRef.current) {
-              try {
-                  const canvas = await html2canvas(shareRef.current, {
-                      backgroundColor: null, // Transparent bg for container, but card has bg
-                      scale: 2, // Retina scale
-                      useCORS: true,
-                  });
-
-                  canvas.toBlob(async (blob) => {
-                      if (!blob) return;
-                      const file = new File([blob], `chargepal_${record.id}.png`, { type: 'image/png' });
-
-                      // Try Web Share API (Mobile)
-                      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-                          try {
-                              await navigator.share({
-                                  files: [file],
-                                  title: '充电账单',
-                                  text: `我在 ${vName} 上充了 ${record.energyCharged}度电，花费 ${record.totalCost}元。 #充小助`
-                              });
-                          } catch (err) {
-                              console.error('Share failed', err);
-                          }
-                      } else {
-                          // Fallback to download (Desktop)
-                          const link = document.createElement('a');
-                          link.download = `chargepal_${record.id}.png`;
-                          link.href = canvas.toDataURL('image/png');
-                          link.click();
-                      }
-                      setSharingData(null);
-                      setIsSharing(false);
-                  }, 'image/png');
-
-              } catch (error) {
-                  console.error("Image generation failed", error);
-                  setSharingData(null);
-                  setIsSharing(false);
-                  alert("图片生成失败");
-              }
-          }
-      }, 100);
-  };
-
   return (
     <div className="pb-20 space-y-4">
       
-      {/* --- Hidden Share Card Template (Rendered Offscreen) --- */}
-      {sharingData && (
-          <div className="fixed top-0 left-[-9999px] z-50">
-             <div ref={shareRef} className="w-[375px] bg-gradient-to-br from-primary-600 to-teal-700 p-6 font-sans text-white">
-                 <div className="bg-white text-gray-900 rounded-2xl shadow-2xl overflow-hidden">
-                     {/* Header */}
-                     <div className="bg-primary-50 p-6 border-b border-primary-100 flex justify-between items-center">
-                         <div>
-                             <div className="flex items-center text-primary-700 font-bold text-lg mb-1">
-                                 <Zap className="w-5 h-5 mr-1 fill-primary-600" /> 充小助账单
-                             </div>
-                             <div className="text-xs text-gray-500">
-                                 {formatDate(sharingData.record.startTime)}
-                             </div>
-                         </div>
-                         <div className="text-right">
-                             <div className="text-xs text-gray-500 mb-1">车辆</div>
-                             <div className="font-bold text-gray-800 bg-white px-2 py-1 rounded border border-gray-200 shadow-sm text-sm">
-                                 {sharingData.vehicleName}
-                             </div>
-                         </div>
-                     </div>
-
-                     {/* Main Body */}
-                     <div className="p-6">
-                         <div className="text-center mb-8">
-                             <div className="text-sm text-gray-500 mb-1">本次充电费用</div>
-                             <div className="text-5xl font-extrabold text-gray-900 tracking-tight">
-                                 <span className="text-2xl align-top mr-1">¥</span>
-                                 {sharingData.record.totalCost.toFixed(2)}
-                             </div>
-                         </div>
-
-                         <div className="grid grid-cols-2 gap-4 mb-6">
-                             <div className="bg-gray-50 p-3 rounded-xl border border-gray-100 text-center">
-                                 <div className="text-xs text-gray-400 mb-1">充电电量</div>
-                                 <div className="text-xl font-bold text-primary-600">
-                                     {sharingData.record.energyCharged.toFixed(2)} <span className="text-xs text-gray-500">kWh</span>
-                                 </div>
-                             </div>
-                             <div className="bg-gray-50 p-3 rounded-xl border border-gray-100 text-center">
-                                 <div className="text-xs text-gray-400 mb-1">充电单价</div>
-                                 <div className="text-xl font-bold text-blue-600">
-                                     {sharingData.record.pricePerKwh} <span className="text-xs text-gray-500">元/度</span>
-                                 </div>
-                             </div>
-                         </div>
-                         
-                         <div className="space-y-3">
-                            <div className="flex justify-between items-center text-sm border-b border-gray-100 pb-2">
-                                <span className="text-gray-400 flex items-center"><Clock className="w-3 h-3 mr-2"/> 充电时长</span>
-                                <span className="font-medium text-gray-700">{formatDuration(sharingData.record.durationMinutes)}</span>
-                            </div>
-                            <div className="flex justify-between items-center text-sm border-b border-gray-100 pb-2">
-                                <span className="text-gray-400 flex items-center"><BatteryCharging className="w-3 h-3 mr-2"/> 电量变化</span>
-                                <span className="font-medium text-gray-700">{sharingData.record.startSoC}% <span className="text-gray-300 mx-1">→</span> {sharingData.record.endSoC}%</span>
-                            </div>
-                            {sharingData.record.location && (
-                                <div className="flex justify-between items-center text-sm border-b border-gray-100 pb-2">
-                                    <span className="text-gray-400 flex items-center"><Car className="w-3 h-3 mr-2"/> 地点</span>
-                                    <span className="font-medium text-gray-700 truncate max-w-[180px]">{sharingData.record.location}</span>
-                                </div>
-                            )}
-                         </div>
-                     </div>
-                     
-                     {/* Footer */}
-                     <div className="bg-gray-50 p-4 text-center border-t border-dashed border-gray-200">
-                         <div className="text-[10px] text-gray-400 uppercase tracking-widest font-medium">Generated by ChargePal</div>
-                     </div>
-                 </div>
-             </div>
-          </div>
-      )}
-
       {/* --- Filter Bar --- */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 transition-all">
         <div className="flex justify-between items-center">
@@ -222,7 +87,7 @@ const RecordList: React.FC<Props> = ({ state, onEdit, onDelete }) => {
                     {hasActiveFilters && <span className="ml-1.5 w-2 h-2 bg-primary-500 rounded-full"></span>}
                 </button>
                 
-                {/* Mini Summary */}
+                {/* Mini Summary (Visible when filters are collapsed but active, or always on desktop) */}
                 <div className="hidden sm:flex items-center space-x-4 text-sm text-gray-500">
                     <span>共 {summary.count} 笔</span>
                     <span>¥{summary.cost.toFixed(1)}</span>
@@ -330,7 +195,7 @@ const RecordList: React.FC<Props> = ({ state, onEdit, onDelete }) => {
                 onClick={() => onEdit(record)}
                 className="group bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md transition-all cursor-pointer relative overflow-hidden h-full flex flex-col"
             >
-                {/* Top Bar */}
+                {/* Top Bar: Date, Vehicle, Duration */}
                 <div className="flex justify-between items-center bg-gray-50 dark:bg-gray-700/50 px-4 py-2 border-b border-gray-100 dark:border-gray-700">
                      <div className="flex items-center space-x-2">
                          <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
@@ -351,7 +216,7 @@ const RecordList: React.FC<Props> = ({ state, onEdit, onDelete }) => {
 
                 <div className="p-4 flex-1 flex flex-col justify-between">
                     <div>
-                        {/* Main Stats */}
+                        {/* Main Stats: Cost, Energy, Distance Driven */}
                         <div className="flex justify-between items-end mb-4">
                             <div>
                                 <div className="text-2xl font-bold text-gray-900 dark:text-white leading-none">
@@ -378,7 +243,7 @@ const RecordList: React.FC<Props> = ({ state, onEdit, onDelete }) => {
                             </div>
                         </div>
 
-                        {/* Grid Stats */}
+                        {/* Grid: SoC, Consumption, Loss */}
                         <div className="grid grid-cols-3 gap-2 py-3 border-t border-dashed border-gray-200 dark:border-gray-700">
                             <div className="flex flex-col items-center justify-center p-2 rounded bg-gray-50 dark:bg-gray-700/30">
                                 <div className="flex items-center text-xs text-gray-500 mb-1">
@@ -413,7 +278,7 @@ const RecordList: React.FC<Props> = ({ state, onEdit, onDelete }) => {
 
                     {/* Footer: Location & Actions */}
                     <div className="flex justify-between items-center mt-3 pt-2 border-t border-gray-100 dark:border-gray-700 min-h-[2rem]">
-                        <div className="text-xs text-gray-400 flex items-center truncate max-w-[40%]">
+                        <div className="text-xs text-gray-400 flex items-center truncate max-w-[70%]">
                             {record.location && (
                                 <>
                                 <div className="w-1.5 h-1.5 rounded-full bg-gray-300 mr-2 flex-shrink-0"></div>
@@ -421,22 +286,15 @@ const RecordList: React.FC<Props> = ({ state, onEdit, onDelete }) => {
                                 </>
                             )}
                         </div>
-                        <div className="flex items-center space-x-1">
-                             <button 
-                                onClick={(e) => handleShare(e, record)}
-                                className="text-gray-400 hover:text-blue-500 transition-colors p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full"
-                                title="分享账单"
-                            >
-                                <Share2 className="w-4 h-4" />
-                            </button>
+                        <div className="flex items-center space-x-3">
                             <button 
                                 onClick={(e) => { e.stopPropagation(); onDelete(record.id); }}
-                                className="text-gray-400 hover:text-red-500 transition-colors p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full"
+                                className="text-gray-400 hover:text-red-500 transition-colors p-1"
                                 title="删除"
                             >
                                 <Trash2 className="w-4 h-4" />
                             </button>
-                            <div className="text-gray-400 group-hover:text-primary-600 p-2 opacity-0 group-hover:opacity-100 transition-all">
+                            <div className="text-primary-600 opacity-0 group-hover:opacity-100 transition-opacity">
                                  <Edit2 className="w-4 h-4" />
                             </div>
                         </div>
