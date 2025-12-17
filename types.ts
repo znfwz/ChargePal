@@ -9,6 +9,7 @@ export interface Vehicle {
   batteryCapacity: number; // kWh
   licensePlate?: string;
   initialOdometer?: number; // New field
+  updatedAt?: number; // Timestamp for sync
 }
 
 export interface ChargingRecord {
@@ -51,6 +52,8 @@ export interface SupabaseConfig {
   projectUrl: string;
   apiKey: string;
   lastSync?: number;
+  autoSync?: boolean;
+  syncInterval?: number; // Minutes, 1-30
 }
 
 export interface AppState {

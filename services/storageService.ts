@@ -85,20 +85,7 @@ export const syncWithSupabase = async (
         if (delError) throw new Error(`同步删除记录失败: ${delError.message}`);
     }
 
-    // Handle deleted vehicles (Careful with FK constraints, normally records should be deleted first)
-    if (localState.deletedVehicleIds && localState.deletedVehicleIds.length > 0) {
-        // Note: In Supabase, you might need Cascade Delete enabled on FK, or delete records first.
-        // Since we delete records by ID above, orphan records shouldn't be an issue if app logic is correct.
-        // However, we need to map IDs to License Plates for cloud deletion if using licensePlate as PK
-        // But localState.deletedVehicleIds contains local IDs. We might have lost the plate info if deleted locally.
-        // Limitation: If vehicle is deleted locally, we might not know its plate to delete remotely if we didn't store it.
-        // Ideally, we should track deleted PLATES, but for now, we assume users don't delete vehicles often.
-        // Better approach for now: We won't auto-delete vehicles from cloud to avoid accidental data loss unless strictly implemented.
-        // SKIPPING VEHICLE CLOUD DELETION FOR SAFETY unless requested, focusing on RECORDS as per prompt.
-    }
-
-
-    // --- STEP 1: PUSH Local Data to Cloud (Upsert) ---
+    // --- STEP 1: PUSH Local Data to Cloud (Upsert with Conflict Resolution) ---
 
     // 1.1 Users
     const { error: userError } = await supabase
@@ -111,15 +98,33 @@ export const syncWithSupabase = async (
       }, { onConflict: 'name' });
     if (userError) throw new Error(`用户同步失败: ${userError.message}`);
 
-    // 1.2 Vehicles (PK: licensePlate)
-    if (localState.vehicles.length > 0) {
-        const vehiclePayload = localState.vehicles.map(v => ({
+    // 1.2 Vehicles (Check Timestamps)
+    // Fetch cloud metadata first
+    const { data: cloudVehiclesMeta, error: cvmError } = await supabase
+        .from('vehicles')
+        .select('licensePlate, updatedAt');
+    
+    if (cvmError) throw new Error(`检查车辆版本失败: ${cvmError.message}`);
+    
+    const cloudVehicleMap = new Map(cloudVehiclesMeta?.map(v => [v.licensePlate, v.updatedAt]) || []);
+    
+    // Filter vehicles to push: Only if local is newer than cloud or cloud missing
+    const vehiclesToPush = localState.vehicles.filter(v => {
+        if (!v.licensePlate) return false;
+        const cloudTime = Number(cloudVehicleMap.get(v.licensePlate));
+        // Push if cloud doesn't exist OR local update time is strictly greater
+        return !cloudTime || (v.updatedAt || 0) > cloudTime;
+    });
+
+    if (vehiclesToPush.length > 0) {
+        const vehiclePayload = vehiclesToPush.map(v => ({
             "licensePlate": v.licensePlate, 
             name: v.name,
             "batteryCapacity": v.batteryCapacity,
             "initialOdometer": v.initialOdometer,
-            "updatedAt": now
+            "updatedAt": v.updatedAt || now
         }));
+        
         const { error: vError } = await supabase
         .from('vehicles')
         .upsert(vehiclePayload, { onConflict: 'licensePlate' });
@@ -127,13 +132,29 @@ export const syncWithSupabase = async (
         if (vError) throw new Error(`车辆上传失败: ${vError.message}`);
     }
 
-    // 1.3 Records (FK: licensePlate)
-    if (localState.records.length > 0) {
-        const recordPayload = localState.records.map(r => {
+    // 1.3 Records (Check Timestamps)
+    // Fetch cloud metadata first
+    const { data: cloudRecordsMeta, error: crmError } = await supabase
+        .from('charging_records')
+        .select('id, updatedAt');
+
+    if (crmError) throw new Error(`检查记录版本失败: ${crmError.message}`);
+
+    const cloudRecordMap = new Map(cloudRecordsMeta?.map(r => [r.id, r.updatedAt]) || []);
+
+    // Filter records to push
+    const recordsToPush = localState.records.filter(r => {
+        const cloudTime = Number(cloudRecordMap.get(r.id));
+        // Push if cloud doesn't exist OR local update time is strictly greater
+        return !cloudTime || (r.updatedAt || 0) > cloudTime;
+    });
+
+    if (recordsToPush.length > 0) {
+        const recordPayload = recordsToPush.map(r => {
             const vehicle = localState.vehicles.find(v => v.id === r.vehicleId);
             if (!vehicle || !vehicle.licensePlate) return null;
 
-            // Extract calculated fields to store in DB for analytics (optional but good practice)
+            // Extract calculated fields to store in DB for analytics
             const { vehicleId, efficiencyLossPct, durationMinutes, theoreticalEnergy, distanceDriven, energyConsumption, ...rest } = r; 
             
             return {
@@ -144,7 +165,7 @@ export const syncWithSupabase = async (
                 "theoreticalEnergy": theoreticalEnergy,
                 "distanceDriven": distanceDriven,
                 "energyConsumption": energyConsumption,
-                "updatedAt": now
+                "updatedAt": r.updatedAt // Use the local actual update time
             };
         }).filter(r => r !== null);
 
@@ -194,7 +215,8 @@ export const syncWithSupabase = async (
                 name: cv.name,
                 batteryCapacity: Number(cv.batteryCapacity),
                 licensePlate: cv.licensePlate,
-                initialOdometer: Number(cv.initialOdometer)
+                initialOdometer: Number(cv.initialOdometer),
+                updatedAt: Number(cv.updatedAt) // Sync timestamp
             });
         }
     }
@@ -208,7 +230,6 @@ export const syncWithSupabase = async (
             const localVehicleId = plateToLocalIdMap.get(cr.licensePlate);
             
             // If we have a vehicle ID for this record, process it.
-            // If the vehicle was deleted locally but exists in cloud, it reappears (which is correct for sync).
             if (localVehicleId) {
                 mergedRecords.push({
                     id: cr.id,
@@ -226,19 +247,17 @@ export const syncWithSupabase = async (
                     temperature: cr.temperature !== null ? Number(cr.temperature) : undefined,
                     createdAt: Number(cr.createdAt),
                     updatedAt: Number(cr.updatedAt),
-                    // Derived fields will be recalculated next, safe to initialize as 0/undefined here or use cloud value
                 });
             }
         }
     }
 
     // 3.3 Recalculate Consistency
-    // Ensure odometer chains, consumption, and efficiency stats are consistent across the merged timeline
     const finalRecords = recalculateRecords(mergedRecords, mergedVehicles);
 
     return { 
         success: true, 
-        message: "同步成功 (已更新并移除云端已删记录)", 
+        message: "同步成功 (已双向合并)", 
         data: {
             vehicles: mergedVehicles,
             records: finalRecords,

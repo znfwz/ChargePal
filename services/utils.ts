@@ -180,7 +180,7 @@ export const parseCSV = (content: string): any[] => {
   return data;
 };
 
-// Core Logic: Recalculate driven distance, consumption, AND efficiency stats
+// Core Logic: Recalculate derived data (Distance, Consumption, Efficiency, Duration)
 // This ensures that if vehicle capacity changes or records are inserted out of order, everything stays consistent.
 export const recalculateRecords = (records: ChargingRecord[], vehicles: Vehicle[]): ChargingRecord[] => {
     // Group by vehicle
@@ -209,7 +209,7 @@ export const recalculateRecords = (records: ChargingRecord[], vehicles: Vehicle[
             let distanceDriven = 0;
             let energyConsumption = 0;
 
-            // Repair Total Cost if invalid (NaN) or zero while price/energy exist
+            // 1. Repair Total Cost
             let totalCost = current.totalCost;
             if ((typeof totalCost !== 'number' || isNaN(totalCost) || totalCost === 0) && current.energyCharged > 0 && current.pricePerKwh > 0) {
                  totalCost = parseFloat((current.energyCharged * current.pricePerKwh).toFixed(2));
@@ -217,8 +217,13 @@ export const recalculateRecords = (records: ChargingRecord[], vehicles: Vehicle[
                 totalCost = parseFloat(totalCost.toFixed(2));
             }
 
-            // Recalculate Theoretical Energy & Efficiency based on current vehicle capacity
-            // This is crucial if user edits vehicle capacity
+            // 2. Recalculate Duration if times are present (Fix for CSV import or sync missing duration)
+            let durationMinutes = current.durationMinutes;
+            if (current.startTime && current.endTime) {
+                durationMinutes = calculateDuration(current.startTime, current.endTime);
+            }
+
+            // 3. Recalculate Theoretical Energy & Efficiency based on current vehicle capacity
             let theoreticalEnergy = current.theoreticalEnergy;
             let efficiencyLossPct = current.efficiencyLossPct;
             
@@ -233,7 +238,7 @@ export const recalculateRecords = (records: ChargingRecord[], vehicles: Vehicle[
                  }
             }
 
-            // Recalculate Distance Driven: Current Odometer - Previous Odometer
+            // 4. Recalculate Distance Driven: Current Odometer - Previous Odometer
             if (prev) {
                 distanceDriven = Math.max(0, current.odometer - prev.odometer);
                 
@@ -252,6 +257,7 @@ export const recalculateRecords = (records: ChargingRecord[], vehicles: Vehicle[
             result.push({
                 ...current,
                 totalCost,
+                durationMinutes,
                 distanceDriven,
                 energyConsumption,
                 theoreticalEnergy,

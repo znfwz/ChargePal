@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AppState, ViewState, ChargingRecord, Vehicle } from './types';
 import { loadState, saveState, clearState, DEFAULT_STATE, syncWithSupabase } from './services/storageService';
 import { generateId, recalculateRecords } from './services/utils';
@@ -20,6 +20,13 @@ const App: React.FC = () => {
   const [editingRecord, setEditingRecord] = useState<ChargingRecord | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
+  // Refs for access inside intervals/effects without stale closures
+  const stateRef = useRef(state);
+  const isSyncingRef = useRef(isSyncing);
+
+  useEffect(() => { stateRef.current = state; }, [state]);
+  useEffect(() => { isSyncingRef.current = isSyncing; }, [isSyncing]);
+
   // Initialize
   useEffect(() => {
     const loaded = loadState();
@@ -35,6 +42,49 @@ const App: React.FC = () => {
         saveState(state);
     }
   }, [state]);
+
+  // Auto-Sync Logic (Startup + Interval)
+  useEffect(() => {
+    const config = state.supabaseConfig;
+    // Check if auto sync is enabled and valid
+    if (!config?.autoSync || !config?.apiKey || !config?.projectUrl) return;
+
+    const performAutoSync = async () => {
+        if (isSyncingRef.current) return;
+        
+        // Use ref to get latest state for sync
+        const currentState = stateRef.current;
+        if (!currentState.supabaseConfig) return;
+
+        setIsSyncing(true);
+        try {
+            const result = await syncWithSupabase(currentState.supabaseConfig, currentState);
+            if (result.success && result.data) {
+                setState(prev => ({ 
+                    ...prev, 
+                    ...result.data,
+                    supabaseConfig: {
+                        ...prev.supabaseConfig!,
+                        lastSync: Date.now()
+                    }
+                }));
+            }
+        } catch (e) {
+            console.error("Auto sync failed", e);
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
+    // 1. Run immediately on enable/mount
+    performAutoSync();
+
+    // 2. Schedule interval
+    const minutes = Math.max(1, Math.min(30, config.syncInterval || 15));
+    const intervalId = setInterval(performAutoSync, minutes * 60 * 1000);
+
+    return () => clearInterval(intervalId);
+  }, [state.supabaseConfig?.autoSync, state.supabaseConfig?.syncInterval, state.supabaseConfig?.apiKey, state.supabaseConfig?.projectUrl]);
 
   // Dark Mode Logic
   const isDarkMode = state.user.theme === 'dark' || 
@@ -111,7 +161,14 @@ const App: React.FC = () => {
     try {
         const result = await syncWithSupabase(state.supabaseConfig, state);
         if (result.success && result.data) {
-             setState(prev => ({ ...prev, ...result.data }));
+             setState(prev => ({ 
+                 ...prev, 
+                 ...result.data,
+                 supabaseConfig: {
+                    ...prev.supabaseConfig!,
+                    lastSync: Date.now()
+                 }
+             }));
         }
         // Optional: Add toast notification here
     } catch (e) {
@@ -140,6 +197,21 @@ const App: React.FC = () => {
   // --- Rendering ---
 
   const isSyncConfigured = !!(state.supabaseConfig?.projectUrl && state.supabaseConfig?.apiKey);
+
+  // Generate Tooltip for Sync Button
+  const syncButtonTitle = React.useMemo(() => {
+    if (isSyncing) return "正在同步数据...";
+    if (!state.supabaseConfig?.lastSync) return "点击立即同步";
+    
+    const date = new Date(state.supabaseConfig.lastSync);
+    const timeStr = date.toLocaleString('zh-CN', {
+        month: 'numeric',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+    return `点击同步\n上次同步: ${timeStr}`;
+  }, [isSyncing, state.supabaseConfig?.lastSync]);
 
   // Navigation Items Config
   const navItems = [
@@ -265,7 +337,7 @@ const App: React.FC = () => {
                             onClick={handleSync}
                             disabled={isSyncing}
                             className={`p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors ${isSyncing ? 'opacity-50' : ''}`}
-                            title="同步数据"
+                            title={syncButtonTitle}
                         >
                             <RefreshCw className={`w-5 h-5 ${isSyncing ? 'animate-spin text-primary-600' : ''}`} />
                         </button>
@@ -299,7 +371,7 @@ const App: React.FC = () => {
                             onClick={handleSync}
                             disabled={isSyncing}
                             className={`p-2 rounded-full text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors ${isSyncing ? 'opacity-50' : ''}`}
-                            title="同步数据"
+                            title={syncButtonTitle}
                         >
                             <RefreshCw className={`w-5 h-5 ${isSyncing ? 'animate-spin text-primary-600' : ''}`} />
                         </button>
@@ -318,7 +390,7 @@ const App: React.FC = () => {
         </header>
 
         {/* Content Area */}
-        <main className="flex-1 w-full max-w-7xl mx-auto p-4 md:p-8 overflow-x-hidden mb-20 md:mb-0">
+        <main className="flex-1 w-full max-w-[1920px] mx-auto p-4 md:p-6 lg:p-8 overflow-x-hidden mb-20 md:mb-0">
             {view === 'dashboard' && <Dashboard state={state} />}
             
             {/* Center constrained widths for forms and lists to look good on wide screens */}
@@ -334,7 +406,7 @@ const App: React.FC = () => {
             )}
             
             {view === 'records' && (
-                <div className="max-w-7xl mx-auto">
+                <div className="w-full">
                     <RecordList 
                         state={state} 
                         onEdit={(r) => { setEditingRecord(r); setView('add_record'); }} 

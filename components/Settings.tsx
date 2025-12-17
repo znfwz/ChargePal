@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { AppState, Vehicle, SupabaseConfig, ChargingRecord, ChargingType } from '../types';
 import { generateId, exportToCSV, parseCSV, calculateDuration, downloadCSVTemplate, calculateTheoreticalEnergy, recalculateRecords } from '../services/utils';
 import { syncWithSupabase, getSupabaseSetupSQL } from '../services/storageService';
-import { Cloud, Download, Plus, Trash2, Car, Database, AlertCircle, Check, Edit2, X, Save, Upload, FileText, User, Settings as SettingsIcon, Sun, Moon, Monitor, ChevronDown, ChevronUp, Copy, LogOut, AlertTriangle } from 'lucide-react';
+import { Cloud, Download, Plus, Trash2, Car, Database, AlertCircle, Check, Edit2, X, Save, Upload, FileText, User, Settings as SettingsIcon, Sun, Moon, Monitor, ChevronDown, ChevronUp, Copy, LogOut, AlertTriangle, Clock } from 'lucide-react';
 
 interface Props {
   state: AppState;
@@ -29,6 +29,9 @@ const Settings: React.FC<Props> = ({ state, onUpdateState, onReset }) => {
   // Supabase Form
   const [sbUrl, setSbUrl] = useState(state.supabaseConfig?.projectUrl || '');
   const [sbKey, setSbKey] = useState(state.supabaseConfig?.apiKey || '');
+  const [sbAutoSync, setSbAutoSync] = useState(state.supabaseConfig?.autoSync || false);
+  const [sbInterval, setSbInterval] = useState(state.supabaseConfig?.syncInterval || 15);
+  
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
   const [importMsg, setImportMsg] = useState('');
@@ -70,6 +73,7 @@ const Settings: React.FC<Props> = ({ state, onUpdateState, onReset }) => {
 
   const handleSaveVehicle = () => {
     if (!newVehicleName || !newVehicleCap) return;
+    const now = Date.now();
 
     if (editingVehicleId) {
         // Update existing vehicle
@@ -80,7 +84,8 @@ const Settings: React.FC<Props> = ({ state, onUpdateState, onReset }) => {
                     name: newVehicleName,
                     batteryCapacity: Number(newVehicleCap),
                     initialOdometer: Number(newVehicleOdo) || 0,
-                    licensePlate: newVehiclePlate || undefined
+                    licensePlate: newVehiclePlate || undefined,
+                    updatedAt: now
                 };
             }
             return v;
@@ -93,7 +98,8 @@ const Settings: React.FC<Props> = ({ state, onUpdateState, onReset }) => {
             name: newVehicleName,
             batteryCapacity: Number(newVehicleCap),
             initialOdometer: Number(newVehicleOdo) || 0,
-            licensePlate: newVehiclePlate || undefined
+            licensePlate: newVehiclePlate || undefined,
+            updatedAt: now
         };
         onUpdateState({ vehicles: [...state.vehicles, newV] });
     }
@@ -140,7 +146,13 @@ const Settings: React.FC<Props> = ({ state, onUpdateState, onReset }) => {
 
     setIsSyncing(true);
     setSyncMsg('同步中...');
-    const config: SupabaseConfig = { projectUrl: sbUrl, apiKey: sbKey };
+    
+    const config: SupabaseConfig = { 
+        projectUrl: sbUrl, 
+        apiKey: sbKey,
+        autoSync: sbAutoSync,
+        syncInterval: sbInterval
+    };
     
     // Save config first
     onUpdateState({ supabaseConfig: config });
@@ -178,6 +190,7 @@ const Settings: React.FC<Props> = ({ state, onUpdateState, onReset }) => {
             const newRecords: ChargingRecord[] = [];
             let successCount = 0;
             let failCount = 0;
+            const now = Date.now();
 
             for (const row of parsedData) {
                 // Find Vehicle
@@ -253,8 +266,8 @@ const Settings: React.FC<Props> = ({ state, onUpdateState, onReset }) => {
                         distanceDriven: 0,
                         energyConsumption: 0,
                         
-                        createdAt: Date.now(),
-                        updatedAt: Date.now()
+                        createdAt: now,
+                        updatedAt: now
                     };
                     newRecords.push(record);
                     successCount++;
@@ -451,125 +464,141 @@ const Settings: React.FC<Props> = ({ state, onUpdateState, onReset }) => {
                         <div className="flex gap-3">
                             <input type="number" placeholder="初始里程" value={newVehicleOdo} onChange={e => setNewVehicleOdo(e.target.value)} className="w-24 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg p-2 dark:text-white text-sm"/>
                             <input type="text" placeholder="车牌 (同步必填)" value={newVehiclePlate} onChange={e => setNewVehiclePlate(e.target.value)} className="flex-1 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg p-2 dark:text-white text-sm"/>
-                            
-                            <button 
-                                onClick={handleSaveVehicle} 
-                                className={`p-2 rounded-lg text-white flex-shrink-0 flex items-center justify-center w-10 ${editingVehicleId ? 'bg-green-600 hover:bg-green-700' : 'bg-primary-600 hover:bg-primary-700'}`}
-                                title={editingVehicleId ? "保存修改" : "添加车辆"}
-                            >
-                                {editingVehicleId ? <Save className="w-5 h-5"/> : <Plus className="w-5 h-5"/>}
-                            </button>
                         </div>
+                        <button onClick={handleSaveVehicle} className="w-full py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium flex items-center justify-center">
+                            {editingVehicleId ? <Check className="w-4 h-4 mr-2"/> : <Plus className="w-4 h-4 mr-2"/>}
+                            {editingVehicleId ? '更新车辆信息' : '添加车辆'}
+                        </button>
                     </div>
                 </div>
             </div>
         )}
 
         {activeTab === 'data' && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+            <div className="space-y-6">
+                {/* Sync Card */}
                 <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-                    <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-white flex items-center">
-                        <Download className="w-5 h-5 mr-2" /> 导入 / 导出
-                    </h3>
-                    
-                    <div className="space-y-3">
-                        <div className="grid grid-cols-2 gap-3">
-                            <button 
-                                onClick={() => exportToCSV(state.records, state.vehicles)}
-                                className="flex items-center justify-center py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200"
-                            >
-                                <Download className="w-4 h-4 mr-2"/> 导出数据
-                            </button>
-
-                             <button 
-                                onClick={downloadCSVTemplate}
-                                className="flex items-center justify-center py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200"
-                            >
-                                <FileText className="w-4 h-4 mr-2"/> 下载模板
-                            </button>
-                        </div>
-
-                        <button 
-                            onClick={handleImportClick}
-                            className="w-full flex items-center justify-center py-3 border border-dashed border-primary-500 text-primary-700 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/10 rounded-lg text-sm font-medium hover:bg-primary-100 dark:hover:bg-primary-900/20"
-                        >
-                            <Upload className="w-4 h-4 mr-2"/> 导入 CSV 数据
-                        </button>
-                        
-                        <input 
-                            type="file" 
-                            accept=".csv" 
-                            ref={fileInputRef} 
-                            onChange={handleFileChange} 
-                            className="hidden"
-                        />
-                    </div>
-                    {importMsg && (
-                        <div className={`mt-3 p-3 rounded-lg text-xs ${importMsg.includes('成功') ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300'}`}>
-                            {importMsg}
-                        </div>
-                    )}
-                </div>
-
-                <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-                    <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-white flex items-center">
+                     <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-white flex items-center">
                         <Cloud className="w-5 h-5 mr-2" /> 云端同步 (Supabase)
                     </h3>
-                    <div className="space-y-3">
-                        <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">项目 URL</label>
-                            <input type="text" value={sbUrl} onChange={e => setSbUrl(e.target.value)} className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg p-2 dark:text-white text-sm" placeholder="https://xyz.supabase.co"/>
+                    
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-xs font-medium text-gray-500 mb-1">Project URL</label>
+                                <input type="text" value={sbUrl} onChange={e => setSbUrl(e.target.value)} className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg p-2 dark:text-white text-sm" placeholder="https://xxx.supabase.co" />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-gray-500 mb-1">Anon Key</label>
+                                <input type="password" value={sbKey} onChange={e => setSbKey(e.target.value)} className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg p-2 dark:text-white text-sm" placeholder="public-anon-key" />
+                            </div>
                         </div>
-                        <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">API Key (Public)</label>
-                            <input type="password" value={sbKey} onChange={e => setSbKey(e.target.value)} className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg p-2 dark:text-white text-sm"/>
+
+                        <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/30 rounded-lg">
+                            <div className="flex items-center">
+                                <Clock className="w-4 h-4 text-gray-400 mr-2"/>
+                                <span className="text-sm text-gray-700 dark:text-gray-300">自动同步间隔 (分钟)</span>
+                            </div>
+                            <div className="flex items-center space-x-3">
+                                <input 
+                                    type="number" 
+                                    min="1" max="60" 
+                                    value={sbInterval} 
+                                    onChange={e => setSbInterval(Number(e.target.value))}
+                                    className="w-16 bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded p-1 text-center text-sm"
+                                />
+                                <label className="flex items-center cursor-pointer">
+                                    <div className="relative">
+                                        <input type="checkbox" className="sr-only" checked={sbAutoSync} onChange={e => setSbAutoSync(e.target.checked)} />
+                                        <div className={`block w-10 h-6 rounded-full transition-colors ${sbAutoSync ? 'bg-primary-500' : 'bg-gray-300 dark:bg-gray-600'}`}></div>
+                                        <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${sbAutoSync ? 'transform translate-x-4' : ''}`}></div>
+                                    </div>
+                                    <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">开启</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                             <button 
+                                onClick={handleSync}
+                                disabled={isSyncing || !sbUrl || !sbKey}
+                                className={`flex-1 flex items-center justify-center py-2.5 rounded-lg font-medium text-white transition-all
+                                    ${isSyncing ? 'bg-gray-400 cursor-not-allowed' : 'bg-primary-600 hover:bg-primary-700 shadow-md shadow-primary-600/20'}`}
+                             >
+                                <div className={`${isSyncing ? 'animate-spin mr-2' : 'mr-2'}`}>
+                                    {isSyncing ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full"></div> : <Cloud className="w-4 h-4"/>}
+                                </div>
+                                {isSyncing ? '同步中...' : '保存配置并同步'}
+                             </button>
                         </div>
                         
                         {syncMsg && (
-                           <div className={`p-2 rounded text-xs flex items-center ${syncMsg.includes('成功') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-                               {syncMsg.includes('成功') ? <Check className="w-3 h-3 mr-1"/> : <AlertCircle className="w-3 h-3 mr-1"/>}
-                               {syncMsg}
-                           </div>
-                        )}
-
-                        <button 
-                            onClick={handleSync}
-                            disabled={isSyncing || !sbUrl || !sbKey}
-                            className={`w-full py-2.5 rounded-lg text-sm font-medium text-white flex justify-center items-center ${isSyncing ? 'bg-primary-400' : 'bg-primary-600 hover:bg-primary-700'}`}
-                        >
-                            {isSyncing ? '同步中...' : '保存并同步'}
-                        </button>
-                    </div>
-                    
-                    <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-700">
-                        <div 
-                            className="flex justify-between items-center cursor-pointer group"
-                            onClick={() => setShowSql(!showSql)}
-                        >
-                            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
-                                <Database className="w-4 h-4 mr-1"/> 数据库初始化指南
-                            </h4>
-                            {showSql ? <ChevronUp className="w-4 h-4 text-gray-400"/> : <ChevronDown className="w-4 h-4 text-gray-400"/>}
-                        </div>
-                        
-                        {showSql && (
-                            <div className="mt-3 relative animate-in fade-in slide-in-from-top-2 duration-200">
-                                <p className="text-xs text-gray-500 mb-2">请在 Supabase 的 SQL Editor 中运行此代码：</p>
-                                <div className="relative group">
-                                    <pre className="bg-gray-900 text-gray-200 p-3 rounded-lg text-[10px] overflow-x-auto max-h-60 border border-gray-700">
-                                        {getSupabaseSetupSQL()}
-                                    </pre>
-                                    <button 
-                                        onClick={handleCopySql}
-                                        className="absolute top-2 right-2 p-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded shadow-md transition-colors opacity-0 group-hover:opacity-100"
-                                        title="复制 SQL"
-                                    >
-                                        {sqlCopied ? <Check className="w-3.5 h-3.5 text-green-400"/> : <Copy className="w-3.5 h-3.5"/>}
-                                    </button>
-                                </div>
+                            <div className={`text-xs p-2 rounded ${syncMsg.includes('失败') ? 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400' : 'bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400'}`}>
+                                {syncMsg}
                             </div>
                         )}
+
+                        {/* Setup Guide */}
+                        <div className="border-t border-gray-100 dark:border-gray-700 pt-3">
+                             <button onClick={() => setShowSql(!showSql)} className="flex items-center text-xs text-primary-600 hover:text-primary-700 font-medium">
+                                 {showSql ? <ChevronUp className="w-3 h-3 mr-1"/> : <ChevronDown className="w-3 h-3 mr-1"/>}
+                                 {showSql ? '收起数据库配置指南' : '如何配置 Supabase?'}
+                             </button>
+                             
+                             {showSql && (
+                                 <div className="mt-3 bg-gray-50 dark:bg-gray-900 rounded-lg p-3 text-xs">
+                                     <p className="text-gray-500 mb-2">请在 Supabase 的 SQL Editor 中运行以下代码以创建必要的表结构：</p>
+                                     <div className="relative group">
+                                         <pre className="bg-gray-800 text-gray-300 p-3 rounded overflow-x-auto font-mono text-[10px] leading-relaxed max-h-48 overflow-y-auto">
+                                             {getSupabaseSetupSQL()}
+                                         </pre>
+                                         <button 
+                                            onClick={handleCopySql}
+                                            className="absolute top-2 right-2 p-1.5 bg-white/10 hover:bg-white/20 rounded text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                                            title="复制SQL"
+                                         >
+                                             {sqlCopied ? <Check className="w-3 h-3"/> : <Copy className="w-3 h-3"/>}
+                                         </button>
+                                     </div>
+                                 </div>
+                             )}
+                        </div>
                     </div>
+                </div>
+
+                {/* Import/Export Card */}
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                    <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-white flex items-center">
+                        <Database className="w-5 h-5 mr-2" /> 数据备份与恢复
+                    </h3>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                        <button onClick={() => exportToCSV(state.records, state.vehicles)} className="flex flex-col items-center justify-center p-4 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl border border-dashed border-gray-300 dark:border-gray-600 transition-colors">
+                            <Download className="w-6 h-6 text-primary-600 mb-2"/>
+                            <span className="text-sm font-medium text-gray-900 dark:text-white">导出 CSV</span>
+                            <span className="text-xs text-gray-500 mt-1">备份所有记录</span>
+                        </button>
+                        
+                        <button onClick={handleImportClick} className="flex flex-col items-center justify-center p-4 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl border border-dashed border-gray-300 dark:border-gray-600 transition-colors">
+                            <Upload className="w-6 h-6 text-blue-500 mb-2"/>
+                            <span className="text-sm font-medium text-gray-900 dark:text-white">导入 CSV</span>
+                            <span className="text-xs text-gray-500 mt-1">恢复或迁移数据</span>
+                        </button>
+                        <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".csv" className="hidden" />
+                    </div>
+
+                    <div className="mt-4 flex justify-between items-center text-xs text-gray-400">
+                         <span>支持标准 CSV 格式</span>
+                         <button onClick={downloadCSVTemplate} className="text-primary-600 hover:underline flex items-center">
+                             <FileText className="w-3 h-3 mr-1"/> 下载导入模板
+                         </button>
+                    </div>
+
+                    {importMsg && (
+                        <div className={`mt-3 text-xs p-2 rounded ${importMsg.includes('失败') || importMsg.includes('错误') ? 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400' : 'bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400'}`}>
+                            {importMsg}
+                        </div>
+                    )}
                 </div>
             </div>
         )}

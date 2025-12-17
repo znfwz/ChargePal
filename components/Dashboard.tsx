@@ -31,12 +31,19 @@ const Dashboard: React.FC<Props> = ({ state }) => {
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
 
   useEffect(() => {
-    // Improve chart rendering stability: use setTimeout to ensure layout is computed and container has size.
-    // Recharts requires the container to have non-zero dimensions.
-    const timer = setTimeout(() => {
+    // Use requestAnimationFrame to ensure layout is painted before rendering charts.
+    // This prevents the "width(-1)" error in Recharts when containers haven't sized yet.
+    let rafId: number;
+    const initCharts = () => {
         setChartsReady(true);
-    }, 200);
-    return () => clearTimeout(timer);
+    };
+    
+    // Double RAF ensures the next paint frame has occurred
+    rafId = requestAnimationFrame(() => {
+        rafId = requestAnimationFrame(initCharts);
+    });
+
+    return () => cancelAnimationFrame(rafId);
   }, []);
 
   const availableYears = useMemo(() => {
@@ -67,11 +74,9 @@ const Dashboard: React.FC<Props> = ({ state }) => {
     const chargingCount = records.length;
     
     // Total Loss Cost Calculation
-    // Ensure we don't sum up negative losses (gains) and handle potential undefined costs
     const totalLossCost = records.reduce((sum, r) => {
         const lossPct = Math.max(0, r.efficiencyLossPct || 0);
         const cost = r.totalCost || 0;
-        // Loss Cost = Total Cost * (Loss% / 100)
         return sum + (cost * lossPct / 100);
     }, 0);
 
@@ -142,7 +147,7 @@ const Dashboard: React.FC<Props> = ({ state }) => {
   return (
     <div className="space-y-6 pb-20">
       {stats && (
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 md:gap-4">
           <StatCard 
             title="总费用(元)" 
             value={stats.totalCost.toFixed(2)} 
@@ -202,9 +207,9 @@ const Dashboard: React.FC<Props> = ({ state }) => {
                 </div>
             </div>
             
-            <div className="h-64 w-full">
+            <div className="h-64 w-full relative">
               {chartsReady && (
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} debounce={50}>
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                   <BarChart data={chartData.barData}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" opacity={0.5} />
                     <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#9ca3af', fontSize: 12}} />
@@ -227,9 +232,9 @@ const Dashboard: React.FC<Props> = ({ state }) => {
           {/* Type Distribution */}
           <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
             <h3 className="text-lg font-semibold mb-6 text-gray-900 dark:text-white">充电方式分布</h3>
-            <div className="h-64 w-full">
+            <div className="h-64 w-full relative">
               {chartsReady && (
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} debounce={50}>
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                   <PieChart>
                     <Pie
                       data={chartData.pieData}
