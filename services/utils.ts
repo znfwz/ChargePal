@@ -243,11 +243,8 @@ export const recalculateRecords = (records: ChargingRecord[], vehicles: Vehicle[
                 distanceDriven = Math.max(0, current.odometer - prev.odometer);
                 
                 // Recalculate Consumption
-                const socUsed = prev.endSoC - current.startSoC;
-                if (distanceDriven > 0 && socUsed > 0 && capacity > 0) {
-                     const energyUsed = (capacity * socUsed) / 100;
-                     const rawConsumption = (energyUsed / distanceDriven) * 100;
-                     energyConsumption = parseFloat(rawConsumption.toFixed(2));
+                if (distanceDriven > 0) {
+                     energyConsumption = calculateConsumption(current.energyCharged, distanceDriven);
                 }
             } else {
                 distanceDriven = 0; 

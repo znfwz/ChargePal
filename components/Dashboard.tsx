@@ -64,8 +64,10 @@ const Dashboard: React.FC<Props> = ({ state }) => {
     
     // Average consumption (weighted)
     const recordsWithDistance = records.filter(r => (r.distanceDriven || 0) > 0);
-    const avgConsumption = recordsWithDistance.length 
-      ? (recordsWithDistance.reduce((sum, r) => sum + (r.energyConsumption || 0), 0) / recordsWithDistance.length)
+    const totalWeightedConsumption = recordsWithDistance.reduce((sum, r) => sum + ((r.energyConsumption || 0) * (r.distanceDriven || 0)), 0);
+    const totalDistanceForAvg = recordsWithDistance.reduce((sum, r) => sum + (r.distanceDriven || 0), 0);
+    const avgConsumption = totalDistanceForAvg > 0 
+      ? totalWeightedConsumption / totalDistanceForAvg
       : 0;
 
     const costPerKm = totalDistanceDriven > 0 ? totalCost / totalDistanceDriven : 0;

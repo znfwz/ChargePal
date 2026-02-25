@@ -219,10 +219,8 @@ const RecordForm: React.FC<Props> = ({ state, onSave, onCancel, initialRecord })
     // But for the immediate feedback here:
     if (lastRecord && Number(odometer) > lastRecord.odometer) {
         distanceDriven = Number(odometer) - lastRecord.odometer;
-        const socUsed = lastRecord.endSoC - Number(startSoC);
-        if (socUsed > 0 && distanceDriven > 0) {
-            const energyUsedFromBattery = (currentVehicle!.batteryCapacity * socUsed) / 100;
-            energyConsumption = (energyUsedFromBattery / distanceDriven) * 100;
+        if (distanceDriven > 0) {
+            energyConsumption = parseFloat(((finalEnergy / distanceDriven) * 100).toFixed(2));
         }
     }
 
