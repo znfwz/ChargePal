@@ -43,6 +43,8 @@ const RecordForm: React.FC<Props> = ({ state, onSave, onCancel, initialRecord })
     return localDate.toISOString().slice(0, 16);
   };
 
+  const hasLoadedDraft = React.useRef(false);
+
   // Initial load logic
   useEffect(() => {
     if (initialRecord) {
@@ -59,16 +61,67 @@ const RecordForm: React.FC<Props> = ({ state, onSave, onCancel, initialRecord })
       setLocation(initialRecord.location || '');
       setTemperature(initialRecord.temperature !== undefined ? initialRecord.temperature : '');
     } else {
-      setStartTime(toLocalInputFormat(new Date()));
-      if (vehicleId && !initialRecord) { // Only autofill if adding new
-        if (lastRecord) {
-            setPricePerKwh(lastRecord.pricePerKwh);
-            setLocation(lastRecord.location || '');
-            setType(lastRecord.type);
+      if (!hasLoadedDraft.current) {
+        hasLoadedDraft.current = true;
+        const draftStr = localStorage.getItem('chargepal_record_draft');
+        if (draftStr) {
+          try {
+            const draft = JSON.parse(draftStr);
+            if (draft.vehicleId) setVehicleId(draft.vehicleId);
+            if (draft.startTime) setStartTime(draft.startTime);
+            if (draft.endTime) setEndTime(draft.endTime);
+            if (draft.odometer !== undefined) setOdometer(draft.odometer);
+            if (draft.startSoC !== undefined) setStartSoC(draft.startSoC);
+            if (draft.endSoC !== undefined) setEndSoC(draft.endSoC);
+            if (draft.pricePerKwh !== undefined) setPricePerKwh(draft.pricePerKwh);
+            if (draft.energyCharged !== undefined) setEnergyCharged(draft.energyCharged);
+            if (draft.totalCost !== undefined) setTotalCost(draft.totalCost);
+            if (draft.type) setType(draft.type);
+            if (draft.location !== undefined) setLocation(draft.location);
+            if (draft.temperature !== undefined) setTemperature(draft.temperature);
+            return; // Skip default autofill if draft exists
+          } catch (e) {
+            console.error('Failed to parse draft', e);
+          }
+        }
+        
+        setStartTime(toLocalInputFormat(new Date()));
+        if (vehicleId && lastRecord) {
+          setPricePerKwh(lastRecord.pricePerKwh);
+          setLocation(lastRecord.location || '');
+          setType(lastRecord.type);
         }
       }
     }
-  }, [initialRecord, vehicleId, lastRecord]); // Removed state.records from dep to avoid loop, dependent on lastRecord memo
+  }, [initialRecord, vehicleId, lastRecord]);
+
+  // Save draft on change
+  useEffect(() => {
+    if (!initialRecord && hasLoadedDraft.current) {
+      const draft = {
+        vehicleId,
+        startTime,
+        endTime,
+        odometer,
+        startSoC,
+        endSoC,
+        pricePerKwh,
+        energyCharged,
+        totalCost,
+        type,
+        location,
+        temperature
+      };
+      localStorage.setItem('chargepal_record_draft', JSON.stringify(draft));
+    }
+  }, [vehicleId, startTime, endTime, odometer, startSoC, endSoC, pricePerKwh, energyCharged, totalCost, type, location, temperature, initialRecord]);
+
+  const handleCancel = () => {
+    if (!initialRecord) {
+      localStorage.removeItem('chargepal_record_draft');
+    }
+    onCancel();
+  };
 
   // --- Real-time Validation Handlers ---
 
@@ -247,6 +300,9 @@ const RecordForm: React.FC<Props> = ({ state, onSave, onCancel, initialRecord })
       updatedAt: Date.now()
     };
 
+    if (!initialRecord) {
+      localStorage.removeItem('chargepal_record_draft');
+    }
     onSave(newRecord);
   };
 
@@ -274,7 +330,7 @@ const RecordForm: React.FC<Props> = ({ state, onSave, onCancel, initialRecord })
         <h2 className="text-xl font-bold text-gray-900 dark:text-white">
           {initialRecord ? '编辑充电记录' : '新增充电记录'}
         </h2>
-        <button onClick={onCancel} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+        <button onClick={handleCancel} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
           <X className="w-6 h-6" />
         </button>
       </div>
@@ -286,7 +342,18 @@ const RecordForm: React.FC<Props> = ({ state, onSave, onCancel, initialRecord })
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">车辆</label>
           <select 
             value={vehicleId} 
-            onChange={e => { setVehicleId(e.target.value); setError('vehicleId', null); }}
+            onChange={e => { 
+              const newId = e.target.value;
+              setVehicleId(newId); 
+              setError('vehicleId', null); 
+              
+              const newLastRecord = getLastRecord(state.records, newId);
+              if (newLastRecord) {
+                setPricePerKwh(newLastRecord.pricePerKwh);
+                setLocation(newLastRecord.location || '');
+                setType(newLastRecord.type);
+              }
+            }}
             className={getInputClass('vehicleId')}
             disabled={!!initialRecord}
           >
@@ -459,7 +526,7 @@ const RecordForm: React.FC<Props> = ({ state, onSave, onCancel, initialRecord })
         </div>
 
         <div className="flex justify-end space-x-3 pt-4 border-t dark:border-gray-700">
-            <button type="button" onClick={onCancel} className="px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600">
+            <button type="button" onClick={handleCancel} className="px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600">
                 取消
             </button>
             <button type="submit" className="flex items-center px-5 py-2.5 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 focus:ring-4 focus:ring-primary-300 dark:focus:ring-primary-900 transition-colors">
