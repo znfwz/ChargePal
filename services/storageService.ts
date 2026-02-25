@@ -74,6 +74,10 @@ export const syncWithSupabase = async (
     const supabase = createClient(config.projectUrl, config.apiKey);
     const now = Date.now();
 
+    // Try to get auth user (in case we add login later), otherwise null
+    const { data: { user } } = await supabase.auth.getUser();
+    const userId = user?.id || null;
+
     // --- STEP 0: PROCESS DELETIONS ---
     // Handle deleted records
     if (localState.deletedRecordIds && localState.deletedRecordIds.length > 0) {
@@ -94,7 +98,9 @@ export const syncWithSupabase = async (
           name: localState.user.name, 
           theme: localState.user.theme,
           onboarded: localState.user.onboarded,
-          "updatedAt": now
+          "updatedAt": now,
+          // user_id will be handled by default in DB if not provided, or explicit if we have it
+          ...(userId ? { user_id: userId } : {})
       }, { onConflict: 'name' });
     if (userError) throw new Error(`用户同步失败: ${userError.message}`);
 
@@ -122,7 +128,8 @@ export const syncWithSupabase = async (
             name: v.name,
             "batteryCapacity": v.batteryCapacity,
             "initialOdometer": v.initialOdometer,
-            "updatedAt": v.updatedAt || now
+            "updatedAt": v.updatedAt || now,
+            ...(userId ? { user_id: userId } : {})
         }));
         
         const { error: vError } = await supabase
@@ -155,7 +162,7 @@ export const syncWithSupabase = async (
             if (!vehicle || !vehicle.licensePlate) return null;
 
             // Extract calculated fields to store in DB for analytics
-            const { vehicleId, efficiencyLossPct, durationMinutes, theoreticalEnergy, distanceDriven, energyConsumption, ...rest } = r; 
+            const { vehicleId, efficiencyLossPct, durationMinutes, theoreticalEnergy, distanceDriven, energyConsumption, userId: localRecordUserId, ...rest } = r; 
             
             return {
                 ...rest,
@@ -165,7 +172,8 @@ export const syncWithSupabase = async (
                 "theoreticalEnergy": theoreticalEnergy,
                 "distanceDriven": distanceDriven,
                 "energyConsumption": energyConsumption,
-                "updatedAt": r.updatedAt // Use the local actual update time
+                "updatedAt": r.updatedAt, // Use the local actual update time
+                ...(userId ? { user_id: userId } : {})
             };
         }).filter(r => r !== null);
 
@@ -216,6 +224,7 @@ export const syncWithSupabase = async (
                 batteryCapacity: Number(cv.batteryCapacity),
                 licensePlate: cv.licensePlate,
                 initialOdometer: Number(cv.initialOdometer),
+                userId: cv.user_id, // Capture RLS owner if present
                 updatedAt: Number(cv.updatedAt) // Sync timestamp
             });
         }
@@ -245,6 +254,7 @@ export const syncWithSupabase = async (
                     totalCost: Number(cr.totalCost),
                     location: cr.location || undefined,
                     temperature: cr.temperature !== null ? Number(cr.temperature) : undefined,
+                    userId: cr.user_id, // Capture RLS owner if present
                     createdAt: Number(cr.createdAt),
                     updatedAt: Number(cr.updatedAt),
                 });
@@ -272,26 +282,31 @@ export const syncWithSupabase = async (
   }
 };
 
-export const getSupabaseSetupSQL = () => `-- 1. 用户表 (Users)
+export const getSupabaseSetupSQL = () => `/* 
+  充小助 (ChargePal) 数据库初始化脚本 
+  包含 RLS (行级安全) 配置
+*/
+
+-- 1. 用户表 (Users)
 create table if not exists users (
   name text primary key,
   theme text,
   onboarded boolean,
-  "updatedAt" bigint
+  "updatedAt" bigint,
+  user_id uuid default auth.uid() -- RLS 字段
 );
 
 -- 2. 车辆表 (Vehicles)
--- 使用 licensePlate (车牌号) 作为主键，确保多端唯一性
 create table if not exists vehicles (
   "licensePlate" text primary key,
   name text,
   "batteryCapacity" numeric,
   "initialOdometer" numeric,
-  "updatedAt" bigint
+  "updatedAt" bigint,
+  user_id uuid default auth.uid() -- RLS 字段
 );
 
 -- 3. 充电记录表 (Charging Records)
--- 关联 licensePlate
 create table if not exists charging_records (
   id text primary key,
   "licensePlate" text references vehicles("licensePlate"),
@@ -307,25 +322,41 @@ create table if not exists charging_records (
   location text,
   temperature numeric,
   
-  -- 计算字段 (用于云端分析，本地拉取后会重新计算)
+  -- 计算字段
   "durationMinutes" numeric,
   "theoreticalEnergy" numeric,
   "efficiencyLossPct" numeric,
   "distanceDriven" numeric,
   "energyConsumption" numeric,
   
-  -- 时间戳
+  -- 元数据
   "createdAt" bigint,
-  "updatedAt" bigint
+  "updatedAt" bigint,
+  user_id uuid default auth.uid() -- RLS 字段
 );
 
--- 开启 RLS (推荐)
-alter table charging_records enable row level security;
-alter table vehicles enable row level security;
+-- 4. 开启行级安全 (RLS)
+-- 这是 Supabase 推荐的安全最佳实践，即使在当前应用中使用 API Key 访问，
+-- 开启它也能消除 Dashboard 警告，并为未来开启认证做准备。
 alter table users enable row level security;
+alter table vehicles enable row level security;
+alter table charging_records enable row level security;
 
--- 创建全公开策略 (仅供演示，生产环境请配置具体用户策略)
-create policy "Public Access" on users for all using (true);
-create policy "Public Access" on vehicles for all using (true);
-create policy "Public Access" on charging_records for all using (true);
+-- 5. 配置访问策略 (Policies)
+-- 注意：因为当前版本 App 使用 API Key 直接访问而非用户登录，
+-- 我们需要创建一个“允许所有(Allow All)”的策略来保证功能正常。
+-- 如果您将来实现了 Auth 登录，可以删除此策略并启用下方的“严格安全策略”。
+
+-- [当前策略] 允许 API Key 持有者访问所有数据 (解决 RLS enabled 但无 policy 导致的不可访问问题)
+create policy "Allow access via API Key" on users for all using (true) with check (true);
+create policy "Allow access via API Key" on vehicles for all using (true) with check (true);
+create policy "Allow access via API Key" on charging_records for all using (true) with check (true);
+
+/* 
+-- [严格安全策略] 仅供参考 (未来开启 Auth 后使用)
+-- create policy "Users can only access their own data" on vehicles 
+--   for all using (auth.uid() = user_id);
+-- create policy "Users can only access their own records" on charging_records 
+--   for all using (auth.uid() = user_id);
+*/
 `;

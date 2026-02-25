@@ -9,6 +9,7 @@ export interface Vehicle {
   batteryCapacity: number; // kWh
   licensePlate?: string;
   initialOdometer?: number; // New field
+  userId?: string; // Owner ID for RLS
   updatedAt?: number; // Timestamp for sync
 }
 
@@ -38,6 +39,8 @@ export interface ChargingRecord {
   distanceDriven?: number; // Since last charge
   energyConsumption?: number; // kWh/100km
   
+  // Metadata
+  userId?: string; // Owner ID for RLS
   createdAt: number; // timestamp
   updatedAt: number; // timestamp
 }

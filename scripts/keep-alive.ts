@@ -6,7 +6,7 @@ const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
   console.error("缺少必要的环境变量");
-  process.exit(1);
+  (process as any).exit(1);
 }
 
 // 创建 Supabase 客户端
@@ -86,7 +86,7 @@ async function keepAlive() {
   // 只要有一个操作成功就认为保活成功
   if (successCount === 0) {
     console.error("所有保活操作都失败了");
-    process.exit(1);
+    (process as any).exit(1);
   }
 }
 
@@ -94,9 +94,9 @@ async function keepAlive() {
 keepAlive()
   .then(() => {
     console.log("保活脚本执行成功");
-    process.exit(0);
+    (process as any).exit(0);
   })
   .catch((error) => {
     console.error("保活脚本执行失败:", error);
-    process.exit(1);
+    (process as any).exit(1);
   });

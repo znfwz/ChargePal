@@ -157,24 +157,21 @@ const RecordForm: React.FC<Props> = ({ state, onSave, onCancel, initialRecord })
     const estimated = estimateEnergy(theoretical, avgLoss);
 
     if (energyCharged === '' || !initialRecord) {
-      setEnergyCharged(parseFloat(estimated.toFixed(2)));
+      const newEnergy = parseFloat(estimated.toFixed(2));
+      setEnergyCharged(newEnergy);
+      if (pricePerKwh !== '') {
+        setTotalCost(parseFloat((newEnergy * Number(pricePerKwh)).toFixed(2)));
+      }
     }
-  }, [currentVehicle, startSoC, endSoC, vehicleId, state.records, initialRecord, energyCharged]);
+  }, [currentVehicle, startSoC, endSoC, vehicleId, state.records, initialRecord, energyCharged, pricePerKwh]);
+
+
 
   useEffect(() => {
-    if (energyCharged !== '' && pricePerKwh !== '') {
-        const cost = Number(energyCharged) * Number(pricePerKwh);
-        if (totalCost === '' || !initialRecord) {
-             setTotalCost(parseFloat(cost.toFixed(2)));
-        }
-    }
-  }, [energyCharged, pricePerKwh, initialRecord, totalCost]);
-
-  useEffect(() => {
-    if (!initialRecord && type === ChargingType.SLOW && energyCharged && startTime) {
+    if (!initialRecord && energyCharged && startTime) {
         const start = new Date(startTime);
         if (!isNaN(start.getTime())) {
-            const powerKw = 7; 
+            const powerKw = type === ChargingType.SLOW ? 7 : 60; 
             const hoursNeeded = Number(energyCharged) / powerKw;
             const msNeeded = hoursNeeded * 60 * 60 * 1000;
             const end = new Date(start.getTime() + msNeeded);
@@ -339,9 +336,9 @@ const RecordForm: React.FC<Props> = ({ state, onSave, onCancel, initialRecord })
                     </button>
                  ))}
                </div>
-               {type === ChargingType.SLOW && !initialRecord && energyCharged !== '' && (
+               {!initialRecord && energyCharged !== '' && (
                  <p className="text-[10px] text-gray-400 mt-1">
-                   已按 7kWh/h 自动估算结束时间
+                   已按 {type === ChargingType.SLOW ? '7' : '60'}kW 自动估算结束时间
                  </p>
                )}
             </div>
@@ -412,7 +409,15 @@ const RecordForm: React.FC<Props> = ({ state, onSave, onCancel, initialRecord })
                     <label className="text-xs text-gray-500 mb-1 block">单价 (元/度)</label>
                     <input 
                         type="number" step="0.01" value={pricePerKwh} 
-                        onChange={e => { setPricePerKwh(Number(e.target.value)); setError('pricePerKwh', null); }} 
+                        onChange={e => { 
+                            const val = e.target.value;
+                            const numVal = val === '' ? '' : Number(val);
+                            setPricePerKwh(numVal); 
+                            setError('pricePerKwh', null); 
+                            if (numVal !== '' && energyCharged !== '') {
+                                setTotalCost(parseFloat((Number(energyCharged) * numVal).toFixed(2)));
+                            }
+                        }} 
                         required 
                         className={getInputClass('pricePerKwh')}
                     />
@@ -420,7 +425,14 @@ const RecordForm: React.FC<Props> = ({ state, onSave, onCancel, initialRecord })
                 </div>
                 <div>
                     <label className="text-xs text-gray-500 mb-1 block">度数 (kWh)</label>
-                    <input type="number" step="0.1" value={energyCharged} onChange={e => setEnergyCharged(Number(e.target.value))} className={getInputClass('energyCharged')}/>
+                    <input type="number" step="0.1" value={energyCharged} onChange={e => {
+                        const val = e.target.value;
+                        const numVal = val === '' ? '' : Number(val);
+                        setEnergyCharged(numVal);
+                        if (numVal !== '' && pricePerKwh !== '') {
+                            setTotalCost(parseFloat((numVal * Number(pricePerKwh)).toFixed(2)));
+                        }
+                    }} className={getInputClass('energyCharged')}/>
                 </div>
                 <div>
                     <label className="text-xs text-gray-500 mb-1 block">总价 (元)</label>
