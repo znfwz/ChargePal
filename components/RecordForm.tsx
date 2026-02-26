@@ -24,6 +24,7 @@ const RecordForm: React.FC<Props> = ({ state, onSave, onCancel, initialRecord })
   const [type, setType] = useState<ChargingType>(ChargingType.FAST);
   const [location, setLocation] = useState('');
   const [temperature, setTemperature] = useState<number | ''>('');
+  const [showCalculator, setShowCalculator] = useState(false);
 
   // Validation Errors State
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -489,7 +490,19 @@ const RecordForm: React.FC<Props> = ({ state, onSave, onCancel, initialRecord })
                     <ErrorMsg field="pricePerKwh" />
                 </div>
                 <div>
-                    <label className="text-xs text-gray-500 mb-1 block">度数 (kWh)</label>
+                    <label className="text-xs text-gray-500 mb-1 flex items-center justify-between">
+                        <span>度数 (kWh)</span>
+                        {type === ChargingType.SLOW && (
+                            <button 
+                                type="button" 
+                                onClick={() => setShowCalculator(true)}
+                                className="text-primary-600 hover:text-primary-700 flex items-center"
+                            >
+                                <Calculator className="w-3 h-3 mr-0.5" />
+                                累加
+                            </button>
+                        )}
+                    </label>
                     <input type="number" step="0.1" value={energyCharged} onChange={e => {
                         const val = e.target.value;
                         const numVal = val === '' ? '' : Number(val);
@@ -536,6 +549,109 @@ const RecordForm: React.FC<Props> = ({ state, onSave, onCancel, initialRecord })
         </div>
 
       </form>
+
+      {showCalculator && (
+        <CalculatorModal 
+          initialValue={energyCharged}
+          onClose={() => setShowCalculator(false)}
+          onConfirm={(val) => {
+            setEnergyCharged(val);
+            if (val !== '' && pricePerKwh !== '') {
+                setTotalCost(parseFloat((Number(val) * Number(pricePerKwh)).toFixed(2)));
+            }
+            setShowCalculator(false);
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+const CalculatorModal: React.FC<{ 
+  initialValue: number | '', 
+  onClose: () => void, 
+  onConfirm: (val: number) => void 
+}> = ({ initialValue, onClose, onConfirm }) => {
+  const [display, setDisplay] = useState(initialValue ? String(initialValue) : '');
+
+  const handlePress = (btn: string) => {
+    if (btn === 'C') setDisplay('');
+    else if (btn === 'DEL') setDisplay(prev => prev.slice(0, -1));
+    else if (btn === '=') {
+      try {
+        if (/^[0-9+\-*/. ]+$/.test(display)) {
+          // eslint-disable-next-line no-new-func
+          const result = new Function(`'use strict'; return (${display})`)();
+          setDisplay(String(Number(result.toFixed(2))));
+        }
+      } catch (e) {}
+    } else {
+      setDisplay(prev => prev + btn);
+    }
+  };
+
+  const handleConfirm = () => {
+    try {
+      if (/^[0-9+\-*/. ]+$/.test(display)) {
+        // eslint-disable-next-line no-new-func
+        const result = new Function(`'use strict'; return (${display})`)();
+        const finalVal = Number(Number(result).toFixed(2));
+        if (!isNaN(finalVal)) onConfirm(finalVal);
+      } else {
+        const finalVal = Number(display);
+        if (!isNaN(finalVal)) onConfirm(finalVal);
+      }
+    } catch (e) {
+      const finalVal = Number(display);
+      if (!isNaN(finalVal)) onConfirm(finalVal);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 animate-in fade-in duration-200">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-xs overflow-hidden transform transition-all">
+        <div className="p-4 bg-gray-50 dark:bg-gray-900 border-b dark:border-gray-700 flex justify-between items-center">
+           <h3 className="font-medium text-gray-700 dark:text-gray-300 flex items-center">
+             <Calculator className="w-4 h-4 mr-2" />
+             度数累加器
+           </h3>
+           <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+             <X className="w-5 h-5"/>
+           </button>
+        </div>
+        <div className="p-4">
+          <div className="bg-gray-100 dark:bg-gray-700 p-3 rounded-lg mb-4 text-right text-2xl font-mono overflow-x-auto min-h-[56px] flex items-center justify-end break-all">
+            {display || '0'}
+          </div>
+          <div className="grid grid-cols-4 gap-2">
+            {['7','8','9','+','4','5','6','-','1','2','3','*','C','0','.','/'].map(btn => (
+              <button 
+                key={btn} 
+                type="button"
+                onClick={() => handlePress(btn)} 
+                className={`p-3 rounded-lg font-medium active:scale-95 transition-transform ${
+                  ['+','-','*','/'].includes(btn) 
+                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-200' 
+                    : btn === 'C' 
+                      ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 hover:bg-red-200'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-200 dark:hover:bg-gray-600'
+                }`}
+              >
+                {btn}
+              </button>
+            ))}
+            <button type="button" onClick={() => handlePress('DEL')} className="col-span-2 p-3 bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-300 rounded-lg font-medium hover:bg-gray-300 active:scale-95 transition-transform">
+              退格
+            </button>
+            <button type="button" onClick={() => handlePress('=')} className="col-span-2 p-3 bg-blue-500 text-white rounded-lg font-bold hover:bg-blue-600 active:scale-95 transition-transform">
+              =
+            </button>
+            <button type="button" onClick={handleConfirm} className="col-span-4 p-3 mt-2 bg-primary-600 text-white rounded-lg font-bold hover:bg-primary-700 active:scale-95 transition-transform">
+              确认填入
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
