@@ -6,6 +6,7 @@ import Dashboard from './components/Dashboard';
 import RecordForm from './components/RecordForm';
 import RecordList from './components/RecordList';
 import Settings from './components/Settings';
+import InstallPrompt from './components/InstallPrompt';
 import { LayoutDashboard, PlusCircle, List, Settings as SettingsIcon, Zap, Sun, Moon, User, RefreshCw, Cloud } from 'lucide-react';
 
 const App: React.FC = () => {
@@ -482,6 +483,8 @@ const App: React.FC = () => {
           </button>
         </div>
       </nav>
+
+      <InstallPrompt />
     </div>
   );
 };
