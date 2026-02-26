@@ -490,19 +490,7 @@ const RecordForm: React.FC<Props> = ({ state, onSave, onCancel, initialRecord })
                     <ErrorMsg field="pricePerKwh" />
                 </div>
                 <div>
-                    <label className="text-xs text-gray-500 mb-1 flex items-center justify-between">
-                        <span>度数 (kWh)</span>
-                        {type === ChargingType.SLOW && (
-                            <button 
-                                type="button" 
-                                onClick={() => setShowCalculator(true)}
-                                className="text-primary-600 hover:text-primary-700 flex items-center"
-                            >
-                                <Calculator className="w-3 h-3 mr-0.5" />
-                                累加
-                            </button>
-                        )}
-                    </label>
+                    <label className="text-xs text-gray-500 mb-1 block">度数 (kWh)</label>
                     <input type="number" step="0.1" value={energyCharged} onChange={e => {
                         const val = e.target.value;
                         const numVal = val === '' ? '' : Number(val);
@@ -511,6 +499,18 @@ const RecordForm: React.FC<Props> = ({ state, onSave, onCancel, initialRecord })
                             setTotalCost(parseFloat((numVal * Number(pricePerKwh)).toFixed(2)));
                         }
                     }} className={getInputClass('energyCharged')}/>
+                    <div className="mt-1 h-5 flex items-center">
+                        {type === ChargingType.SLOW && (
+                            <button 
+                                type="button" 
+                                onClick={() => setShowCalculator(true)}
+                                className="text-primary-600 hover:text-primary-700 text-xs flex items-center"
+                            >
+                                <Calculator className="w-3 h-3 mr-0.5" />
+                                累加
+                            </button>
+                        )}
+                    </div>
                 </div>
                 <div>
                     <label className="text-xs text-gray-500 mb-1 block">总价 (元)</label>
