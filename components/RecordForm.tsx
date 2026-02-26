@@ -567,6 +567,89 @@ const RecordForm: React.FC<Props> = ({ state, onSave, onCancel, initialRecord })
   );
 };
 
+const safeEvaluate = (expr: string): number => {
+  if (!/^[0-9+\-*/. ()]+$/.test(expr)) {
+    throw new Error('Invalid expression');
+  }
+
+  let pos = 0;
+
+  const skipSpaces = () => {
+    while (pos < expr.length && expr[pos] === ' ') pos++;
+  };
+
+  const parseExpression = (): number => {
+    let result = parseTerm();
+    while (true) {
+      skipSpaces();
+      const char = expr[pos];
+      if (char === '+') {
+        pos++;
+        result += parseTerm();
+      } else if (char === '-') {
+        pos++;
+        result -= parseTerm();
+      } else {
+        break;
+      }
+    }
+    return result;
+  };
+
+  const parseTerm = (): number => {
+    let result = parseFactor();
+    while (true) {
+      skipSpaces();
+      const char = expr[pos];
+      if (char === '*') {
+        pos++;
+        result *= parseFactor();
+      } else if (char === '/') {
+        pos++;
+        const divisor = parseFactor();
+        if (divisor === 0) throw new Error('Division by zero');
+        result /= divisor;
+      } else {
+        break;
+      }
+    }
+    return result;
+  };
+
+  const parseFactor = (): number => {
+    skipSpaces();
+    if (pos >= expr.length) throw new Error('Unexpected end of expression');
+
+    const char = expr[pos];
+    if (char === '(') {
+      pos++;
+      const result = parseExpression();
+      skipSpaces();
+      if (expr[pos] !== ')') throw new Error('Missing closing parenthesis');
+      pos++;
+      return result;
+    }
+
+    if (char === '-') {
+      pos++;
+      return -parseFactor();
+    }
+
+    const start = pos;
+    while (pos < expr.length && /[0-9.]/.test(expr[pos])) pos++;
+    if (start === pos) throw new Error('Expected number');
+
+    const value = Number.parseFloat(expr.slice(start, pos));
+    if (Number.isNaN(value)) throw new Error('Invalid number');
+    return value;
+  };
+
+  const result = parseExpression();
+  skipSpaces();
+  if (pos !== expr.length) throw new Error('Unexpected trailing input');
+  return result;
+};
+
 const CalculatorModal: React.FC<{ 
   initialValue: number | '', 
   onClose: () => void, 
@@ -579,12 +662,11 @@ const CalculatorModal: React.FC<{
     else if (btn === 'DEL') setDisplay(prev => prev.slice(0, -1));
     else if (btn === '=') {
       try {
-        if (/^[0-9+\-*/. ]+$/.test(display)) {
-          // eslint-disable-next-line no-new-func
-          const result = new Function(`'use strict'; return (${display})`)();
-          setDisplay(String(Number(result.toFixed(2))));
-        }
-      } catch (e) {}
+        const result = safeEvaluate(display);
+        setDisplay(String(Number(result.toFixed(2))));
+      } catch {
+        setDisplay(prev => prev);
+      }
     } else {
       setDisplay(prev => prev + btn);
     }
@@ -592,18 +674,12 @@ const CalculatorModal: React.FC<{
 
   const handleConfirm = () => {
     try {
-      if (/^[0-9+\-*/. ]+$/.test(display)) {
-        // eslint-disable-next-line no-new-func
-        const result = new Function(`'use strict'; return (${display})`)();
-        const finalVal = Number(Number(result).toFixed(2));
-        if (!isNaN(finalVal)) onConfirm(finalVal);
-      } else {
-        const finalVal = Number(display);
-        if (!isNaN(finalVal)) onConfirm(finalVal);
-      }
-    } catch (e) {
+      const result = safeEvaluate(display);
+      const finalVal = Number(Number(result).toFixed(2));
+      if (!Number.isNaN(finalVal)) onConfirm(finalVal);
+    } catch {
       const finalVal = Number(display);
-      if (!isNaN(finalVal)) onConfirm(finalVal);
+      if (!Number.isNaN(finalVal)) onConfirm(finalVal);
     }
   };
 

@@ -42,12 +42,18 @@ const App: React.FC = () => {
         saveState(state);
     }
   }, [state]);
+  // Extract config values to avoid object reference in deps
+  const supabaseConfig = state.supabaseConfig;
+  const autoSync = supabaseConfig?.autoSync;
+  const syncInterval = supabaseConfig?.syncInterval;
+  const apiKey = supabaseConfig?.apiKey;
+  const projectUrl = supabaseConfig?.projectUrl;
 
   // Auto-Sync Logic (Startup + Interval)
   useEffect(() => {
-    const config = state.supabaseConfig;
+    const config = supabaseConfig;
     // Check if auto sync is enabled and valid
-    if (!config?.autoSync || !config?.apiKey || !config?.projectUrl) return;
+    if (!autoSync || !apiKey || !projectUrl) return;
 
     const performAutoSync = async () => {
         if (isSyncingRef.current) return;
@@ -84,8 +90,7 @@ const App: React.FC = () => {
     const intervalId = setInterval(performAutoSync, minutes * 60 * 1000);
 
     return () => clearInterval(intervalId);
-  }, [state.supabaseConfig?.autoSync, state.supabaseConfig?.syncInterval, state.supabaseConfig?.apiKey, state.supabaseConfig?.projectUrl]);
-
+  }, [autoSync, syncInterval, apiKey, projectUrl]);
   // Dark Mode Logic
   const isDarkMode = state.user.theme === 'dark' || 
     (state.user.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);

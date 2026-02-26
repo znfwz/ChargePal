@@ -1,6 +1,11 @@
 import { ChargingRecord, Vehicle } from '../types';
 
 export const generateId = (): string => {
+  // Use Web Crypto API for cryptographically secure random UUID
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // Fallback for older browsers (should rarely happen)
   return Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
 };
 

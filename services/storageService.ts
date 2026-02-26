@@ -276,9 +276,11 @@ export const syncWithSupabase = async (
         }
     };
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(error);
-    return { success: false, message: error.message || "同步失败" };
+    // Type guard for error with message property
+    const err = error as { message?: string; cause?: string };
+    return { success: false, message: err?.message || "同步失败" };
   }
 };
 
