@@ -47,7 +47,7 @@ const Dashboard: React.FC<Props> = ({ state }) => {
   }, []);
 
   const availableYears = useMemo(() => {
-    const years = new Set(records.map(r => new Date(r.startTime).getFullYear()));
+    const years = new Set<number>(records.map(r => new Date(r.startTime).getFullYear()));
     years.add(new Date().getFullYear()); // Ensure current year is always available
     return Array.from(years).sort((a, b) => b - a);
   }, [records]);
