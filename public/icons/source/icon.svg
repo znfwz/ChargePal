@@ -6,17 +6,13 @@
     </linearGradient>
   </defs>
   
-  <!-- 标准圆角背景 -->
   <rect width="512" height="512" rx="112" ry="112" fill="url(#emeraldGradient)" />
   
-  <!-- 充电插头：整体缩小 25% (scale 0.75) 并居中 (translate 64,64)，确保处于遮罩安全区内 -->
-  <g transform="translate(64, 64) scale(0.75)" stroke="#ffffff" stroke-width="32" fill="none" stroke-linecap="round" stroke-linejoin="round">
-    <!-- 顶部插脚 -->
+  <!-- 将线条宽度 stroke-width 从 32 提升到了 48 -->
+  <g transform="translate(64, 64) scale(0.75)" stroke="#ffffff" stroke-width="36" fill="none" stroke-linecap="round" stroke-linejoin="round">
     <line x1="208" y1="128" x2="208" y2="176" />
     <line x1="304" y1="128" x2="304" y2="176" />
-    <!-- 插头主体 -->
     <rect x="160" y="176" width="192" height="152" rx="40" />
-    <!-- 底部充电线缆 -->
     <line x1="256" y1="328" x2="256" y2="400" />
   </g>
 </svg>

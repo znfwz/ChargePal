@@ -9,16 +9,23 @@ const sourceDir = path.join(iconsDir, 'source');
 fs.mkdirSync(sourceDir, { recursive: true });
 
 const svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <linearGradient id="bg" x1="128" y1="128" x2="896" y2="896" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#10B981"/>
-      <stop offset="1" stop-color="#059669"/>
+    <linearGradient id="emeraldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34d399" />
+      <stop offset="100%" stop-color="#10b981" />
     </linearGradient>
   </defs>
-  <rect x="112" y="112" width="800" height="800" rx="224" fill="url(#bg)"/>
-  <path d="M560 240L360 532H496L432 784L664 456H528L560 240Z" fill="white"/>
-  <rect x="304" y="304" width="416" height="416" rx="120" stroke="white" stroke-opacity="0.18" stroke-width="20"/>
+  
+  <rect width="512" height="512" rx="112" ry="112" fill="url(#emeraldGradient)" />
+  
+  <!-- 将线条宽度 stroke-width 从 32 提升到了 48 -->
+  <g transform="translate(64, 64) scale(0.75)" stroke="#ffffff" stroke-width="48" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="208" y1="128" x2="208" y2="176" />
+    <line x1="304" y1="128" x2="304" y2="176" />
+    <rect x="160" y="176" width="192" height="152" rx="40" />
+    <line x1="256" y1="328" x2="256" y2="400" />
+  </g>
 </svg>`;
 
 const sourceSvgPath = path.join(sourceDir, 'icon.svg');
