@@ -4,6 +4,8 @@ import { generateId, exportToCSV, parseCSV, calculateDuration, downloadCSVTempla
 import { syncWithSupabase, getSupabaseSetupSQL } from '../services/storageService';
 import { Cloud, Download, Plus, Trash2, Car, Database, AlertCircle, Check, Edit2, X, Save, Upload, FileText, User, Settings as SettingsIcon, Sun, Moon, Monitor, ChevronDown, ChevronUp, Copy, LogOut, AlertTriangle, Clock, Github, Info } from 'lucide-react';
 
+declare const __APP_VERSION__: string;
+
 interface Props {
   state: AppState;
   onUpdateState: (newState: Partial<AppState>) => void;
@@ -365,7 +367,7 @@ const Settings: React.FC<Props> = ({ state, onUpdateState, onReset }) => {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">软件版本</span>
-                            <span className="text-sm text-gray-500 dark:text-gray-400 font-mono">v1.0.0</span>
+                            <span className="text-sm text-gray-500 dark:text-gray-400 font-mono">v{__APP_VERSION__}</span>
                         </div>
                         <a 
                             href="https://github.com/znfwz/ChargePal" 
