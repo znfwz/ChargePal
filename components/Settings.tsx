@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { AppState, Vehicle, SupabaseConfig, ChargingRecord, ChargingType } from '../types';
 import { generateId, exportToCSV, parseCSV, calculateDuration, downloadCSVTemplate, calculateTheoreticalEnergy, recalculateRecords } from '../services/utils';
 import { syncWithSupabase, getSupabaseSetupSQL } from '../services/storageService';
-import { Cloud, Download, Plus, Trash2, Car, Database, AlertCircle, Check, Edit2, X, Save, Upload, FileText, User, Settings as SettingsIcon, Sun, Moon, Monitor, ChevronDown, ChevronUp, Copy, LogOut, AlertTriangle, Clock } from 'lucide-react';
+import { Cloud, Download, Plus, Trash2, Car, Database, AlertCircle, Check, Edit2, X, Save, Upload, FileText, User, Settings as SettingsIcon, Sun, Moon, Monitor, ChevronDown, ChevronUp, Copy, LogOut, AlertTriangle, Clock, Github, Info } from 'lucide-react';
 
 interface Props {
   state: AppState;
@@ -354,6 +354,31 @@ const Settings: React.FC<Props> = ({ state, onUpdateState, onReset }) => {
                                 {themeOption === 'light' ? '浅色' : themeOption === 'dark' ? '深色' : '跟随系统'}
                             </button>
                         ))}
+                    </div>
+                </div>
+
+                {/* About Card */}
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 col-span-1 lg:col-span-2">
+                    <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-white flex items-center">
+                        <Info className="w-5 h-5 mr-2" /> 关于
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">软件版本</span>
+                            <span className="text-sm text-gray-500 dark:text-gray-400 font-mono">v1.0.0</span>
+                        </div>
+                        <a 
+                            href="https://github.com/znfwz/ChargePal" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-lg transition-colors group"
+                        >
+                            <div className="flex items-center">
+                                <Github className="w-5 h-5 mr-3 text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white" />
+                                <span className="text-sm font-medium text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white">GitHub 仓库</span>
+                            </div>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">znfwz/ChargePal</span>
+                        </a>
                     </div>
                 </div>
 
