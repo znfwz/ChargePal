@@ -244,15 +244,24 @@ export const recalculateRecords = (records: ChargingRecord[], vehicles: Vehicle[
             }
 
             // 4. Recalculate Distance Driven: Current Odometer - Previous Odometer
+            // 5. Recalculate Consumption: Energy consumed = capacity * (prev_endSOC - curr_startSOC)
+            //    This represents what was actually drained from the battery since the last charge.
+            //    energyConsumption = drained_energy / distanceDriven * 100
             if (prev) {
                 distanceDriven = Math.max(0, current.odometer - prev.odometer);
                 
-                // Recalculate Consumption
                 if (distanceDriven > 0) {
-                     energyConsumption = calculateConsumption(current.energyCharged, distanceDriven);
+                    const vehicle = vehicles.find(v => v.id === vehicleId);
+                    const capacity = vehicle?.batteryCapacity || 0;
+                    // Energy actually consumed = capacity * (prev's endSOC - current's startSOC)
+                    // e.g., prev ended at 100%, now at 31% -> consumed 72 * (100-31)% = 49.68 kWh
+                    const drainedEnergy = capacity * (prev.endSoC - current.startSoC) / 100;
+                    if (drainedEnergy > 0) {
+                        energyConsumption = calculateConsumption(drainedEnergy, distanceDriven);
+                    }
                 }
             } else {
-                distanceDriven = 0; 
+                distanceDriven = 0;
                 energyConsumption = 0;
             }
 

@@ -265,21 +265,30 @@ const RecordForm: React.FC<Props> = ({ state, onSave, onCancel, initialRecord })
     const rawLoss = finalEnergy > 0 ? ((finalEnergy - theoretical) / finalEnergy) * 100 : 0;
     const efficiencyLossPct = parseFloat(rawLoss.toFixed(2));
     
+    // Find the chronologically previous record (the one with startTime <= current startTime)
+    const currentStartTime = new Date(finalStart).getTime();
+    const recordId = initialRecord?.id; // Use existing ID if editing, null if new
+    const prevRecord = state.records
+        .filter(r => r.vehicleId === vehicleId && r.id !== recordId)
+        .filter(r => new Date(r.startTime).getTime() <= currentStartTime)
+        .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())[0];
+
     let distanceDriven = 0;
     let energyConsumption = 0;
     
-    // Recalculate Logic: If editing, we need to be careful. If new, comparing against `lastRecord` is safe.
-    // For simplicity, we use the same logic: check against the *chronologically previous* record in the full list in `utils` recalculate.
-    // But for the immediate feedback here:
-    if (lastRecord && Number(odometer) > lastRecord.odometer) {
-        distanceDriven = Number(odometer) - lastRecord.odometer;
+    if (prevRecord && Number(odometer) > prevRecord.odometer) {
+        distanceDriven = Number(odometer) - prevRecord.odometer;
+        // Energy actually consumed = capacity * (prev's endSOC - current's startSOC)
         if (distanceDriven > 0) {
-            energyConsumption = parseFloat(((finalEnergy / distanceDriven) * 100).toFixed(2));
+            const drainedEnergy = currentVehicle.batteryCapacity * (prevRecord.endSoC - Number(startSoC)) / 100;
+            if (drainedEnergy > 0) {
+                energyConsumption = parseFloat(((drainedEnergy / distanceDriven) * 100).toFixed(2));
+            }
         }
     }
 
     const newRecord: ChargingRecord = {
-      id: initialRecord?.id || generateId(),
+      id: recordId || generateId(),
       vehicleId,
       odometer: Number(odometer),
       startTime: finalStart,

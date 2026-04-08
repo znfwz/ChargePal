@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { AppState, Vehicle, SupabaseConfig, ChargingRecord, ChargingType } from '../types';
 import { generateId, exportToCSV, parseCSV, calculateDuration, downloadCSVTemplate, calculateTheoreticalEnergy, recalculateRecords } from '../services/utils';
 import { syncWithSupabase, getSupabaseSetupSQL } from '../services/storageService';
-import { Cloud, Download, Plus, Trash2, Car, Database, AlertCircle, Check, Edit2, X, Save, Upload, FileText, User, Settings as SettingsIcon, Sun, Moon, Monitor, ChevronDown, ChevronUp, Copy, LogOut, AlertTriangle, Clock, Github, Info } from 'lucide-react';
+import { Cloud, Download, Plus, Trash2, Car, Database, AlertCircle, Check, Edit2, X, Save, Upload, FileText, User, Settings as SettingsIcon, Sun, Moon, Monitor, ChevronDown, ChevronUp, Copy, LogOut, AlertTriangle, Clock, Github, Info, RefreshCw } from 'lucide-react';
 
 declare const __APP_VERSION__: string;
 
@@ -37,6 +37,7 @@ const Settings: React.FC<Props> = ({ state, onUpdateState, onReset }) => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
   const [importMsg, setImportMsg] = useState('');
+  const [recalcMsg, setRecalcMsg] = useState('');
   
   // SQL Guide UI State
   const [showSql, setShowSql] = useState(false);
@@ -168,6 +169,17 @@ const Settings: React.FC<Props> = ({ state, onUpdateState, onReset }) => {
     
     setSyncMsg(result.message);
     setIsSyncing(false);
+  };
+
+  const handleRecalculateAll = () => {
+    if (state.records.length === 0) {
+        setRecalcMsg('暂无记录需要重算。');
+        return;
+    }
+    const recalculated = recalculateRecords(state.records, state.vehicles);
+    onUpdateState({ records: recalculated });
+    setRecalcMsg(`已重算 ${recalculated.length} 条记录的能耗数据。`);
+    setTimeout(() => setRecalcMsg(''), 5000);
   };
 
   const handleImportClick = () => {
@@ -590,6 +602,32 @@ const Settings: React.FC<Props> = ({ state, onUpdateState, onReset }) => {
                                  </div>
                              )}
                         </div>
+                    </div>
+                </div>
+
+                {/* Recalculate Card */}
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                    <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-white flex items-center">
+                        <RefreshCw className="w-5 h-5 mr-2" /> 数据工具
+                    </h3>
+                    
+                    <div className="space-y-3">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                            重新计算所有记录的行驶里程、百公里能耗和效率损耗。适用于修改车辆电池容量后，或历史数据口径调整的场景。
+                        </p>
+                        <button 
+                            onClick={handleRecalculateAll}
+                            disabled={state.records.length === 0}
+                            className="w-full flex items-center justify-center py-2.5 rounded-lg font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all shadow-md shadow-blue-600/20"
+                        >
+                            <RefreshCw className="w-4 h-4 mr-2"/> 重算所有能耗数据
+                        </button>
+
+                        {recalcMsg && (
+                            <div className="text-xs p-2 rounded bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400">
+                                {recalcMsg}
+                            </div>
+                        )}
                     </div>
                 </div>
 
